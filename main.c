@@ -19,7 +19,7 @@ int ptr = 0;
 char* input = "test.c";
 int input_length = 0;
 enum type{TYPE_INTEGER, TYPE_FLOAT, TYPE_STRING, TYPE_CHAR, TYPE_COMMENT,
-    TYPE_TYPE, TYPE_RESERVED, TYPE_OPERATOR, TYPE_IDENTIFIER};
+    TYPE_TYPE, TYPE_RESERVED, TYPE_OPERATOR, TYPE_IDENTIFIER, TYPE_INVALID};
 
 typedef struct{
     int type;       // type of token (there are 9)
@@ -50,14 +50,38 @@ int matchtype(int type){
     return 0;
 }
 
+int matchoperator(char op){
+    if (op == '+'  || op == '-'|| op == '*' || op == '/' || op == '<' || op == '>' ||
+        op == '='  || op == '!'|| op == '&' || op == '?' || op == '[' || op == ']' ||
+        op == '{' || op == '}' || op == '|' || op == '(' || op == ')' || op == '%' ||
+        op == '^' || op == ',' || op == ':' || op == ';'){
+        return 1;
+    }
+    return 0;
+}
+
+int matchchar(){
+
+
+    return 0;
+}
+
 // match operators of equal values, >= <= and not > or <
 int match(char* string, int type){
     // if its an operator, return 0, else 1
     return 0;
 }
 
-void accept(Token token, int tempptr, enum type type1){
-
+void accept(Token token, int tempptr, enum type type1, char* line){
+    int len = tempptr - ptr;
+    token.type = type1;
+    token.length = len;
+    printf("%d-%d:",ptr, tempptr);
+    for (int i = 0; i <= len; i++){
+        token.str[i] = line[ptr +i];
+    }
+    token.str[len+1] = '\0';
+    printf("%s\n", token.str);
 }
 
 int main(int argc, char* argv[]) {
@@ -73,8 +97,7 @@ int main(int argc, char* argv[]) {
     read = fgetc(input_file);
     // get length of file for string building
     while (read != EOF) {
-        printf("%c", read);
-
+//        printf("%c", read);
         input_length++;
         read = fgetc(input_file);
     }
@@ -88,51 +111,44 @@ int main(int argc, char* argv[]) {
         input_string[i]=fgetc(input_file);
     }
     input_string[input_length] = 0;
-    printf("%s\n\n",input_string);
+//    printf("%s\n\n",input_string);
     printf("total num of chars in file: %d\n", input_length);
+    fclose(input_file);
 
     int state = 0;
     int tempptr = ptr;     // used for looking ahead
     int done=0;             // set when token is identified or error is found
 
     Token token;
-    while (!done){
-        switch (state) {
-            case 0:
-                switch(input[tempptr])
-                {
-                    case '+':
-                        state = 1;
-                        tempptr++;
-                        break;
-                    case '%':
-                        accept(token, tempptr, TYPE_OPERATOR);
-                        done = 1;
-                        break;
-                    default:
-                        return 0;   // error
-                } // end of case 0
 
-            case 1:
-                switch(input[tempptr]){
-                    case '+':
-                        // found ++
-                        accept(token, tempptr, TYPE_OPERATOR);
-                        done = 1;
-                        break;
-                    default:
-                        // not a ++ so its a single +
-                        accept(token, tempptr-1, TYPE_OPERATOR);
-                        done = 1;
-                        break;
-                }// end of case 1
+    while(ptr <= input_length){
 
-        }// end of switch case
-        done++;
+        // check for operator
+        if (matchoperator(input_string[ptr])){
+            ptr--;          // adv past op
+            tempptr = ptr+1;
+            accept(token, tempptr, TYPE_OPERATOR, input_string);
+            ptr++;
+        } else if (input_string[ptr] == '\''){
+            tempptr = ptr + 2;  // move to end of char (closing ')
+            accept(token, tempptr, TYPE_CHAR, input_string);
+            ptr = tempptr+1;
+        } else if (input_string[ptr] == '"'){
+            tempptr = ptr +1;  // token after "
+            while (input_string[tempptr] != '"'){
+                tempptr++;
+            }
+            accept(token, tempptr, TYPE_STRING, input_string);
+            ptr = tempptr +1;
+        }
+        else {
+            token.type = TYPE_INVALID;
+
+        }
+        ptr++;
     }
+    printf("\n%d\n", token.type);
 
-
-    fclose(input);
 
 
 
