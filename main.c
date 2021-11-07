@@ -70,18 +70,19 @@ int identifyNextToken(Token *token){
     return 0;
 }
 
+// note strcmp(equal,equal) returns 0 which is true
 int matchtype(char* id){
-    if (strcmp(id, "void") != 0 || strcmp(id, "char") != 0 || strcmp(id, "int") != 0 || strcmp(id, "float") != 0){
+    if (strcmp(id, "void") == 0 || strcmp(id, "char") == 0 || strcmp(id, "int") == 0 || strcmp(id, "float") == 0){
         return 1;
     }
     return 0;
 }
 
-int matchreserved(char* id){
-    if (strcmp(id, "sizeof") != 0 || strcmp(id, "enum") != 0 || strcmp(id, "case") != 0 || strcmp(id, "default") != 0 ||
-            strcmp(id, "if") != 0 || strcmp(id, "else") != 0 || strcmp(id, "switch") != 0 || strcmp(id, "while") != 0 ||
-            strcmp(id, "do") != 0 || strcmp(id, "for") != 0 || strcmp(id, "goto") != 0 || strcmp(id, "continue") != 0 ||
-            strcmp(id, "break") != 0 || strcmp(id, "return") != 0){
+int matchreserved(char id[]){
+    if (strcmp(id, "sizeof") == 0 || strcmp(id, "enum") == 0 || strcmp(id, "case") == 0 || strcmp(id, "default") == 0 ||
+            strcmp(id, "if") == 0 || strcmp(id, "else") == 0 || strcmp(id, "switch") == 0 || strcmp(id, "while") == 0 ||
+            strcmp(id, "do") == 0 || strcmp(id, "for") == 0 || strcmp(id, "goto") == 0 || strcmp(id, "continue") == 0 ||
+            strcmp(id, "break") == 0 || strcmp(id, "return") == 0){
         return 1;
     }
     return 0;
@@ -89,9 +90,9 @@ int matchreserved(char* id){
 
 int matchoperator(char op){
     if (op == '+'  || op == '-'|| op == '*' || op == '/' || op == '<' || op == '>' ||
-        op == '='  || op == '!'|| op == '&' || op == '?' || op == '[' || op == ']' ||
-        op == '{' || op == '}' || op == '|' || op == '(' || op == ')' || op == '%' ||
-        op == '^' || op == ',' || op == ':' || op == ';'){
+            op == '='  || op == '!'|| op == '&' || op == '?' || op == '[' || op == ']' ||
+            op == '{' || op == '}' || op == '|' || op == '(' || op == ')' || op == '%' ||
+            op == '^' || op == ',' || op == ':' || op == ';'){
         return 1;
     }
     return 0;
@@ -118,8 +119,7 @@ void accept(int tptr, enum type type1, char* line){
     }
     token.str[len+1] = '\0';
 
-    printf("pointers: %d-%d   \t%s: ",ptr, tptr, getType(token.type));
-    printf("%s\n", token.str);
+    printf("pointers: %d-%d\t",ptr, tptr);
 
     ptr = tptr + 1; // move ptr to start of next token
 
@@ -167,7 +167,6 @@ int main(int argc, char* argv[]) {
         if (matchoperator(input_string[ptr])){
             tptr = ptr;
             accept(tptr, TYPE_OPERATOR, input_string);
-            ptr--;  // due to accept ptr++; we need to move it back for cases where other types follow immediately
         }
         // check for char (state 1)
         else if (input_string[ptr] == '\''){
@@ -232,29 +231,30 @@ int main(int argc, char* argv[]) {
                 tptr++;
             }
 
-            printf("%d____\n", strcmp(token.str, "continue"));
-
+            // state 2 - type and reserved
             if (input_string[tptr] == '=' || input_string[tptr] == '(' || input_string[tptr] == '[' || input_string[tptr] == ' ') {  // handle white spaces!!!!!!!!!!!!!
                 tptr--;
+                accept(tptr, TYPE_IDENTIFIER, input_string);
+
                 if (matchtype(token.str) == 1)
-                    accept(tptr, TYPE_TYPE, input_string);
+                    token.type = TYPE_TYPE;
                 else if (matchreserved(token.str) == 1)
-                    accept(tptr, TYPE_RESERVED, input_string);
-                else
-                    accept(tptr, TYPE_IDENTIFIER, input_string);
+                    token.type = TYPE_RESERVED;
             }
             else
                 accept(tptr, TYPE_INVALID, input_string);
         }
-
-
-
-        // just else
-        else {
-            token.type = TYPE_INVALID;
-
+        else if (input_string[ptr] == ' ' || input_string[ptr] == '\n' || input_string[ptr] == '\0') {
+            ptr++;
+            // maybe handle white spaces here
+            continue;
         }
-        ptr++;
+        else{
+            printf("FATAL ERROR\n");
+            break;
+        }
+
+        printf("\t%s: %s\n", getType(token.type), token.str);
     }
 
 
