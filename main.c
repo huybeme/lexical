@@ -1,6 +1,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#define FONT_YELLOW         "\x1b[33m"  //type
+#define FONT_GREEN          "\x1b[32m"  // string/char
+#define FONT_CYAN           "\x1b[36m"  // int/floats
+#define FONT_RED            "\x1b[31m"  // reserved words
+#define FONT_PURPLE         "\x1b[35m"  // comment
+#define FONT_BLUE           "\x1b[34m"  // identifier
+#define FONT_COLOR_RESET    "\x1b[0m"
 
 void check_if_exist(FILE *file, char* name)
 {
@@ -21,6 +28,7 @@ char* input = "test.c";
 int input_length = 0;
 enum type{TYPE_INTEGER, TYPE_FLOAT, TYPE_STRING, TYPE_CHAR, TYPE_COMMENT,
     TYPE_TYPE, TYPE_RESERVED, TYPE_OPERATOR, TYPE_IDENTIFIER, TYPE_INVALID};
+FILE *input_file, *printout;
 
 typedef struct{
     int type;       // type of token (there are 9)
@@ -119,26 +127,47 @@ void accept(int tptr, enum type type1, char* line){
     }
     token.str[len+1] = '\0';
 
-    printf("pointers: %d-%d\t",ptr, tptr);
-
+//    printf("pointers: %d-%d\t",ptr, tptr);
+    fprintf(printout, "pointers: %d-%d\t",ptr, tptr);
     ptr = tptr + 1; // move ptr to start of next token
 
 }
 
-int main(int argc, char* argv[]) {
+void printcolor(){
+    if (strcmp(getType(token.type), "TYPE_TYPE") == 0){
+        printf(FONT_YELLOW "%s" FONT_COLOR_RESET, token.str);
+    } else if (strcmp(getType(token.type), "TYPE_STRING") == 0 || strcmp(getType(token.type), "TYPE_CHAR") == 0){
+        printf(FONT_GREEN "%s" FONT_COLOR_RESET, token.str);
+    } else if (strcmp(getType(token.type), "TYPE_INTEGER") == 0 || strcmp(getType(token.type), "TYPE_FLOAT") == 0){
+        printf(FONT_CYAN "%s" FONT_COLOR_RESET, token.str);
+    } else if (strcmp(getType(token.type), "TYPE_RESERVED") == 0){
+        printf(FONT_RED "%s" FONT_COLOR_RESET, token.str);
+    } else if (strcmp(getType(token.type), "TYPE_COMMENT") == 0){
+        printf(FONT_PURPLE "%s" FONT_COLOR_RESET, token.str);
+    } else if (strcmp(getType(token.type), "TYPE_IDENTIFIER") == 0){
+        printf(FONT_BLUE "%s" FONT_COLOR_RESET, token.str);
+    }
+    else{
+        printf("%s", token.str);
+    }
+}
 
-    //create a file
-    FILE *input_file;
+int main(int argc, char* argv[]) {
 
     //get input file - turn this into an input eventually
     input_file = fopen(input, "r");
     check_if_exist(input_file, input);
+
+    //create output
+    char* output_path = "lex_data.txt";
+    printout = fopen(output_path, "w+");
 
     char read;
     read = fgetc(input_file);
     // get length of file for string building
     while (read != EOF) {
         input_length++;
+        fputc(read, printout);
         read = fgetc(input_file);
     }
     printf("\n\n");
@@ -152,7 +181,8 @@ int main(int argc, char* argv[]) {
     }
     input_string[input_length] = 0;
 //    printf("%s\n\n",input_string);
-    printf("total num of chars in file: %d\n", input_length);
+    fprintf(printout, "\n\t**end of method printout**"
+                      "\ntotal num of chars in file: %d\n\n\n", input_length);
     fclose(input_file);
 
     int state = 0;
@@ -163,10 +193,31 @@ int main(int argc, char* argv[]) {
 
     while(ptr <= input_length){
 
+        // print and move past white spaces - handle last white space at the end
+        if (input_string[ptr] == ' ' || input_string[ptr] == '\t' || input_string[ptr] == '\n' || input_string[ptr] == '\0') {
+            printf("%c", input_string[ptr]);
+            ptr++;
+            continue;
+        }
         // check for operator (state 1) - keep ptrs at one spot, may need to update for operators with len > 1
-        if (matchoperator(input_string[ptr])){
+        else if (matchoperator(input_string[ptr])){
             tptr = ptr;
-            accept(tptr, TYPE_OPERATOR, input_string);
+            // check for comments (state 2)
+            if (input_string[ptr] == '/' && input_string[tptr+1] == '/'){
+                while (input_string[tptr] != '\n'){
+                    tptr++;
+                }
+                tptr--;
+                accept(tptr, TYPE_COMMENT, input_string);
+            } else if (input_string[tptr] == '/' && input_string[tptr+1] == '*'){
+                tptr += 2;
+                while (input_string[tptr] != '*' && input_string[tptr+1] != '/'){
+                    tptr++;
+                }
+                tptr++; // capture the second operator for closing comment
+                accept(tptr, TYPE_COMMENT, input_string);
+            }else
+                accept(tptr, TYPE_OPERATOR, input_string);
         }
         // check for char (state 1)
         else if (input_string[ptr] == '\''){
@@ -244,17 +295,14 @@ int main(int argc, char* argv[]) {
             else
                 accept(tptr, TYPE_INVALID, input_string);
         }
-        else if (input_string[ptr] == ' ' || input_string[ptr] == '\n' || input_string[ptr] == '\0') {
-            ptr++;
-            // maybe handle white spaces here
-            continue;
-        }
         else{
-            printf("FATAL ERROR\n");
+            printf("\n\nFATAL ERROR\n");
             break;
         }
 
-        printf("\t%s: %s\n", getType(token.type), token.str);
+        //printf("\t%s: %s\n", getType(token.type), token.str);
+        fprintf(printout,"\t%s: %s\n", getType(token.type), token.str);
+        printcolor();
     }
 
 
