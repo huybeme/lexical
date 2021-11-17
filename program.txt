@@ -1,375 +1,347 @@
-/* the program begins here. "main" starts by reading
-a file name from the command line and reads it into an array*/
-int main(int argc, char* argv[])
-{
-    //open the file
-    FILE* inputfile;
-    input_length=0;
-    inputfile=fopen(arv[1],"r");
-    // go through and count its length
-    while(!feof(inputfile))
-    {
-        fgetc(inputfile);
-        input_length++;
-    }
-    input_length--;	//undo eof
-    //create a string to hold it
-    input=(char*)malloc(input_length+1);
-    //now go back through the file and read it again into the string
-    rewind(inputfile);
-    for(int i=0;i<input_length; i++)
-        input[i]=fgetc(inputfile);
-    input[input_length]=0;
-    flocse(inputfile);
-}
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
-
-
-unsigned char memory[65536];
-unsigned char PC,A,B,C,D,DATAPAGE,INSTPAGE,STACKPAGE,HALTED,SP;
-
-const char* regnames[4]={"A","B","C","D"};
-
-int debug=0;
-int text=1;
-
-unsigned char disp=0;
-int dispcount=0;
-void display(unsigned char c)
-{
-	if((c&0x80)!=0)
-		return;
-	putchar(disp);
-	disp=0;
 /*
-	if((c&0xf)!=c)
-		return;
-	disp=(disp<<4)|(c&0xf);
-	dispcount++;
-	if (dispcount>=2)
-	{
-		dispcount=0;
-		putchar(disp);
-		disp=0;
-	}
-*/
+ *  This program will lexically read a c program and determine the type of
+ *  each token.
+ */
+
+void check_if_exist(FILE *file, char* name)
+{
+    if (file == NULL)
+    {
+        printf("'%s' not found.\n", name);
+        exit(0);
+    }
+    else
+    {
+        printf("'%s' opened.\n", name);
+    }
 }
 
-void reset()
-{
-	PC=A=B=C=D=DATAPAGE=INSTPAGE=STACKPAGE=HALTED=SP=0;
+
+int ptr = 0;
+char* input;
+int input_length = 0;
+enum type{TYPE_INTEGER, TYPE_FLOAT, TYPE_STRING, TYPE_CHAR, TYPE_COMMENT,
+    TYPE_TYPE, TYPE_RESERVED, TYPE_OPERATOR, TYPE_IDENTIFIER, TYPE_INVALID};
+FILE *input_file, *printout;
+
+typedef struct{
+    int type;       // type of token (there are 9)
+    char str[100];  // value of token
+    int length;     // length of token in number of bytes
+}Token;
+
+Token token;
+
+const char* getType(enum type t){
+    switch (t)
+    {
+        case TYPE_INTEGER:
+            return "TYPE_INTEGER";
+        case TYPE_FLOAT:
+            return "TYPE_FLOAT";
+        case TYPE_STRING:
+            return "TYPE_STRING";
+        case TYPE_CHAR:
+            return "TYPE_CHAR";
+        case TYPE_COMMENT:
+            return "TYPE_COMMENT";
+        case TYPE_TYPE:
+            return "TYPE_TYPE";
+        case TYPE_RESERVED:
+            return "TYPE_RESERVED";
+        case TYPE_OPERATOR: return "TYPE_OPERATOR";
+        case TYPE_IDENTIFIER: return "TYPE_IDENTIFIER";
+        case TYPE_INVALID: return "TYPE_INVALID";
+    }
 }
 
-void printRegs(unsigned long inst)
-{
-	printf("%lu PC: %x, A: %x, B: %x, C: %x, D: %x, SP: %x, IPAGE: %x, DPAGE: %x, SPAGE: %x\n",inst,PC,A,B,C,D,SP,INSTPAGE,DATAPAGE,STACKPAGE);
+// advances nexttoken
+void next(){
+    ptr++;
 }
 
-void memoryWrite(unsigned char page, unsigned char address, unsigned char val)
-{
-	if(page>=0x80)
-		memory[((page<<8)|address)&0xffff]=val;
+// reached end of input
+int doneWithInput(){
+    //moves ptr past white spaces
+    return 0;
 }
 
-unsigned char memoryRead(unsigned char page, unsigned int address)
-{
-	return memory[((page<<8)|address)&0xffff];
+// fill empty token with next token
+int identifyNextToken(Token *token){
+    // if not valid token, return 0, else 1
+    return 0;
 }
 
-unsigned char getreg(int r)
-{
-	switch(r)
-	{
-		case 0: return A;
-		case 1: return B;
-		case 2: return C;
-		case 3: return D;
-	}
+
+// match operators of equal values, >= <= and not > or <
+int match(char* string, int type){
+    // if its an operator, return 0, else 1
+    return 0;
 }
 
-void setreg(int r, unsigned char val)
-{
-	switch(r)
-	{
-		case 0: A=val; break;
-		case 1: B=val; break;
-		case 2: C=val; break;
-		case 3: D=val; break;
-	}
+// note strcmp(equal,equal) returns 0 which is true
+int matchtype(char* id){
+    if (strcmp(id, "void") == 0 || strcmp(id, "char") == 0 || strcmp(id, "int") == 0 || strcmp(id, "float") == 0){
+        return 1;
+    }
+    return 0;
 }
 
-void doInstruction()
-{
-	char name[20];
-
-//	unsigned char instruction = memory[(INSTPAGE<<8)|PC];
-	unsigned char instruction = memoryRead(INSTPAGE,PC);
-	PC=(PC+1)&0xff;
-
-	int rd=(instruction>>2)&3;
-	int rs=instruction&3;
-	int imm=((instruction>>2)&0xc)|(instruction&3);
-	int op4=instruction>>4;
-	int op2=instruction>>6;
-	int op0=instruction&3;
-	unsigned char tmp;
-
-	if(op4==0)
-	{
-		if(op0==0)
-		{
-			strcpy(name,"NOP");
-		}
-		else if (op0==1)
-		{
-			strcpy(name,"HALT");
-			HALTED=1;
-		}
-		else if (op0==3)
-		{
-			strcpy(name,"PAGE ");
-			strcat(name,regnames[rd]);
-			DATAPAGE=getreg(rd);
-		}
-	}
-	else if (op4==1)
-	{
-		strcpy(name,"SUB ");
-		strcat(name,regnames[rd]);
-		strcat(name,",");
-		strcat(name,regnames[rs]);
-		setreg(rd,(getreg(rd)-getreg(rs))&0xff);
-	}
-	else if (op4==2)
-	{
-		strcpy(name,"LOAD ");
-		strcat(name,regnames[rd]);
-		strcat(name,",[");
-		strcat(name,regnames[rs]);
-		strcat(name,"]");
-//		setreg(rd,memory[(DATAPAGE<<8)|getreg(rs)]);
-		setreg(rd,memoryRead(DATAPAGE,getreg(rs)));
-	}
-	else if (op4==3)
-	{
-		strcpy(name,"STORE ");
-		strcat(name,regnames[rd]);
-		strcat(name,",[");
-		strcat(name,regnames[rs]);
-		strcat(name,"]");
-//		memory[(DATAPAGE<<8)|getreg(rs)]=getreg(rd);
-		memoryWrite(DATAPAGE,getreg(rs),getreg(rd));
-	}
-	else if (op4==4)
-	{
-		if(op0==0)
-		{
-			strcpy(name,"SKIPZ ");
-			strcat(name,regnames[rd]);
-			if(getreg(rd)==0)
-				PC=(PC+1)&0xff;
-		}
-		else if(op0==1)
-		{
-			strcpy(name,"SKIPNZ ");
-			strcat(name,regnames[rd]);
-			if(getreg(rd)!=0)
-				PC=(PC+1)&0xff;
-		}
-		else if(op0==2)
-		{
-			strcpy(name,"SKIPL ");
-			strcat(name,regnames[rd]);
-			if((getreg(rd)&0x80)!=0)
-				PC=(PC+1)&0xff;
-		}
-		else
-		{
-			strcpy(name,"SKIPGE ");
-			strcat(name,regnames[rd]);
-			if((getreg(rd)&0x80)==0)
-				PC=(PC+1)&0xff;
-		}
-	}
-	else if (op4==5)
-	{
-		strcpy(name,"JALR ");
-		strcat(name,regnames[rd]);
-		strcat(name,",[");
-		strcat(name,regnames[rs]);
-		strcat(name,"]");
-		tmp=PC;
-		PC=getreg(rs);
-		setreg(rd,tmp);
-	}
-	else if (op4==6)
-	{
-		strcpy(name,"NAND ");
-		strcat(name,regnames[rd]);
-		strcat(name,",");
-		strcat(name,regnames[rs]);
-		setreg(rd,~(getreg(rd)&getreg(rs)));
-	}
-	else if (op4==7)
-	{
-		strcpy(name,"ADD ");
-		strcat(name,regnames[rd]);
-		strcat(name,",");
-		strcat(name,regnames[rs]);
-		setreg(rd,(getreg(rd)+getreg(rs))&0xff);
-	}
-	else if (op4==8)
-	{
-		if(op0==0)
-		{
-			strcpy(name,"INC ");
-			strcat(name,regnames[rd]);
-			setreg(rd,(getreg(rd)+1)&0xff);
-		}
-		if(op0==1)
-		{
-			strcpy(name,"DEC ");
-			strcat(name,regnames[rd]);
-			setreg(rd,(getreg(rd)-1)&0xff);
-		}
-/*		else if (op0==2)
-		{
-			strcpy(name,"NEG ");
-			strcat(name,regnames[rd]);
-			setreg(rd,(-getreg(rd))&0xff);
-		}*/
-		else if (op0==2)
-		{
-			strcpy(name,"OUT ");
-			strcat(name,regnames[rd]);
-//			putchar((char)getreg(rd));
-			if(text==0)
-				printf("out: %x\n",getreg(rd));
-			else
-			{
-//				display(getreg(rd));
-				printf("%c",(char)getreg(rd));
-				if(getreg(rd)==0x0d)
-					printf("\n");
-			}
-		}
-		else if (op0==3)
-		{
-			char tmp1,tmp2;
-			strcpy(name,"IN ");
-			strcat(name,regnames[rd]);
-			if(text==0)
-			{
-				printf("Enter a character code: ");
-				tmp1 = getchar();
-				if(tmp1>='0' && tmp1<='9') tmp1-='0';
-				else if (tmp1>='A' && tmp1<='Z') tmp1=tmp1-'A'+10;
-				else if (tmp1>='a' && tmp1<='z') tmp1=tmp1-'a'+10;
-				tmp2 = getchar();
-				if(tmp2>='0' && tmp2<='9') tmp2-='0';
-				else if (tmp2>='A' && tmp2<='Z') tmp2=tmp2-'A'+10;
-				else if (tmp2>='a' && tmp2<='z') tmp2=tmp2-'a'+10;
-				setreg(rd,(tmp1<<4)|tmp2);
-				printf("\n");
-				getchar();
-			}
-			else
-			{
-				tmp1=getchar();
-				if(tmp1==0xa) tmp1=0xd;
-				setreg(rd,tmp1&0xff);
-			}
-		}
-	}
-	else if (op4==9)
-	{
-		strcpy(name,"JMPFAR");
-		INSTPAGE=C;
-		tmp=PC;
-		PC=getreg(rs);
-		setreg(rd,tmp);
-	}
-	else if (op4==0xa)
-	{
-		if(op0==0)
-		{
-			strcpy(name,"PUSH ");
-			strcat(name,regnames[rd]);
-			SP=(SP-1)&0xff;
-//			memory[(STACKPAGE<<8)|SP]=getreg(rd);
-			memoryWrite(STACKPAGE,SP,getreg(rd));
-		}
-		else if (op0==1)
-		{
-			strcpy(name,"POP ");
-			strcat(name,regnames[rd]);
-//			setreg(rd,memory[(STACKPAGE<<8)|SP]);
-			setreg(rd,memoryRead(STACKPAGE,SP));
-			SP=(SP+1)&0xff;
-		}
-		else if (op0==2)
-		{
-			strcpy(name,"STACKPAGE ");
-			strcat(name,regnames[rd]);
-			STACKPAGE=getreg(rd);
-		}
-	}
-	else if (op2==3)
-	{
-		strcpy(name,"SLI ");
-		strcat(name,regnames[rd]);
-		strcat(name,",");
-		char v[2];
-		v[1]=0;
-		v[0]=imm+'0';
-		if(imm>9)
-			v[0]=imm-0xa+'A';
-		strcat(name,v);
-		setreg(rd,(getreg(rd)<<4)|imm);
-	}
-	else
-	{
-		strcpy(name,"ERROR");
-	}
-	if(debug)
-		printf("%s\n",name);
+int matchreserved(char id[]){
+    if (strcmp(id, "sizeof") == 0 || strcmp(id, "enum") == 0 || strcmp(id, "case") == 0 || strcmp(id, "default") == 0 ||
+            strcmp(id, "if") == 0 || strcmp(id, "else") == 0 || strcmp(id, "switch") == 0 || strcmp(id, "while") == 0 ||
+            strcmp(id, "do") == 0 || strcmp(id, "for") == 0 || strcmp(id, "goto") == 0 || strcmp(id, "continue") == 0 ||
+            strcmp(id, "break") == 0 || strcmp(id, "return") == 0){
+        return 1;
+    }
+    return 0;
 }
 
-int main(int argc, char* argv[])
-{
-	FILE* f=fopen(argv[1],"r");
-	int i=0;
-	for(i=0; i<65536; i++)
-		memory[i]=0xff;
-	i=0;
-	while(!feof(f))
-	{
-		int c;
-		fscanf(f,"%x\n",&c);
-		memory[i++]=(unsigned char)(c&0xff);
-	}
-	fclose(f);
+int matchoperator(char op){
+    if (op == '+'  || op == '-'|| op == '*' || op == '/' || op == '<' || op == '>' ||
+            op == '='  || op == '!'|| op == '&' || op == '?' || op == '[' || op == ']' ||
+            op == '{' || op == '}' || op == '|' || op == '(' || op == ')' || op == '%' ||
+            op == '^' || op == ',' || op == ':' || op == ';' || op == '#' || op == '~' ||
+            op == '\\'){
+        return 1;
+    }
 
-//	if(argc>2)
-//		memory[0xfe]=atoi(argv[2]);
-	if(argc>2)
-	{
-		if(argv[2][0]=='d')
-			debug=1;
-		else if (argv[2][0]=='t')
-			text=1;
-	}
+    return 0;
+}
 
-	unsigned long inst;
+int foundwhitespace(char space){
+    if (space == ' ' || space == '\t' || space == '\n')
+        return 1;
+    else
+        return 0;
+}
 
-	reset();
+void accept(int tptr, enum type type1, char* line){
+    int len = tptr - ptr;
+    token.type = type1;
+    token.length = len;
 
-	for(inst=0; HALTED==0; inst++)
-	{
-		doInstruction();
-		if(debug)
-			printRegs(inst);
-	}
+    for (int i = 0; i <= len; i++){
+        token.str[i] = line[ptr +i];
+    }
+    token.str[len+1] = '\0';
 
-	return 0;
+    fprintf(printout, "pointers: %d-%d\t",ptr, tptr);
+    ptr = tptr + 1; // move ptr to start of next token
+
+}
+
+void printcolor(){
+
+    if (strcmp(getType(token.type), "TYPE_TYPE") == 0){     //blue
+        printf("\x1b[34m%s\x1b[0m", token.str);
+    } else if (strcmp(getType(token.type), "TYPE_STRING") == 0 || strcmp(getType(token.type), "TYPE_CHAR") == 0){       //green
+        printf("\x1b[32m%s\x1b[0m", token.str);
+    } else if (strcmp(getType(token.type), "TYPE_INTEGER") == 0 || strcmp(getType(token.type), "TYPE_FLOAT") == 0){     //cyan
+        printf("\x1b[36m%s\x1b[0m", token.str);
+    } else if (strcmp(getType(token.type), "TYPE_RESERVED") == 0){      //purple
+        printf("\x1b[35m%s\x1b[0m", token.str);
+    } else if (strcmp(getType(token.type), "TYPE_COMMENT") == 0){       // hite (shaded)
+        printf("\x1b[37m%s\x1b[0m", token.str);
+    } else if (strcmp(getType(token.type), "TYPE_OPERATOR") == 0){      //yellow
+        printf("\x1b[33m%s\x1b[0m", token.str);
+    } else if (strcmp(getType(token.type), "TYPE_INVALID") == 0){       //bright red
+        printf("\x1b[91m%s\x1b[0m", token.str);
+    }
+    else{   //regular
+        printf("%s", token.str);
+    }
+}
+
+int main(int argc, char* argv[]) {
+
+    // take in an input for a file location
+    if (argv[1] != '\0')
+        input = argv[1];
+    else
+        input = "test.c";
+
+    //get input file - turn this into an input eventually
+    input_file = fopen(input, "r");
+    check_if_exist(input_file, input);
+
+    //create output
+    char* output_path = "lex_data.txt";
+    printout = fopen(output_path, "w+");
+
+    char read;
+    read = fgetc(input_file);
+    // get length of file for string building
+    while (read != EOF) {
+        input_length++;
+        fputc(read, printout);
+        read = fgetc(input_file);
+    }
+    printf("\n\n");
+
+    // put the file into a string
+    char* input_string;
+    input_string=(char*)malloc(input_length);
+    rewind(input_file);
+    for(int i=0; i<input_length; i++){
+        input_string[i]=fgetc(input_file);
+    }
+    input_string[input_length] = 0;
+//    printf("%s\n\n",input_string);
+    fprintf(printout, "\n\t**end of method printout**"
+                      "\ntotal num of chars in file: %d\n\n\n", input_length);
+    fclose(input_file);
+
+    int state = 0;
+    int tptr = ptr;     // used for looking ahead
+    int done=0;             // set when token is identified or error is found
+
+    while(ptr <= input_length){
+
+        // print and move past white spaces - handle last white space at the end
+        if (input_string[ptr] == ' ' || input_string[ptr] == '\t' || input_string[ptr] == '\n' || input_string[ptr] == '\0') {
+            if (input_string[ptr] == '\0') {
+                ptr++;
+                continue;
+            }
+            printf("%c", input_string[ptr]);
+            ptr++;
+            continue;
+        }
+        // check for operator (state 1) - keep ptrs at one spot, may need to update for operators with len > 1
+        else if (matchoperator(input_string[ptr])){
+            tptr = ptr;
+            // check for comments (state 2)
+            if (input_string[ptr] == '/' && input_string[tptr+1] == '/'){
+                while (input_string[tptr] != '\n'){
+                    tptr++;
+                }
+                tptr--;
+                accept(tptr, TYPE_COMMENT, input_string);
+            } else if (input_string[tptr] == '/' && input_string[tptr+1] == '*'){
+                tptr += 2;
+                while (input_string[tptr] != '*' && input_string[tptr+1] != '/'){
+                    tptr++;
+                }
+                tptr++; // capture the second operator for closing comment
+                accept(tptr, TYPE_COMMENT, input_string);
+            } else if (input_string[ptr] == '#' && input_string[ptr+1] == 'i') {    //handle library inclusion (state 2)
+                int count = 0;
+                char word[10];
+
+                while(input_string[tptr] != ' '){
+                    tptr++;
+                    word[count] = input_string[tptr];
+                    count++;
+                }
+                word[count-1] = '\0';
+                while(input_string[tptr] != '\n'){
+                    tptr++;
+                }
+
+                if(strcmp(word, "include") == 0 || strcmp(word, "define") == 0)    // handle include libraries - type invalid for now
+                    accept(tptr, TYPE_INVALID, input_string);
+                else
+                    accept(tptr, TYPE_INVALID, input_string);
+            }
+            else
+                accept(tptr, TYPE_OPERATOR, input_string);
+        }
+        // check for char (state 1)
+        else if (input_string[ptr] == '\''){
+            if (input_string[ptr+1] == '\\')    // handle backslash chars
+                tptr = ptr+3;
+            else
+                tptr = ptr + 2;  // move to end of char (closing ')
+            if (input_string[tptr] == '\'')
+                accept(tptr, TYPE_CHAR, input_string);
+            else {      //syntax error, char has too many inputs
+                while (input_string[ptr] != '\'')
+                {
+                    ptr++;
+                    if (input_string[ptr] == '\0')
+                        break;
+                }
+                tptr = ptr;
+                accept(tptr, TYPE_INVALID, input_string);
+            }
+        }
+        // check for string (state 1)
+        else if (input_string[ptr] == '"'){
+            tptr = ptr +1;  // token after "
+            while (input_string[tptr] != '"'){
+                tptr++;
+                if (input_string[tptr] == '\0') // no ending quotes, syntax error
+                    break;
+            }
+            if (input_string[ptr] == input_string[tptr])
+                accept(tptr, TYPE_STRING, input_string);
+            else
+                accept(tptr, TYPE_INVALID, input_string);
+        }
+        // check for integer (state 1)
+        else if (input_string[ptr] >= '0' && input_string[ptr] <= '9'){
+            tptr = ptr;
+            state = 1;
+            while (input_string[tptr] >= '0' && input_string[tptr] <= '9'){
+                tptr++;
+                // check for float (state 2)
+                if (input_string[tptr] == '.'){
+                    tptr++; //move past decimal
+                    while (input_string[tptr] >= '0' && input_string[tptr] <= '9') {
+                        tptr++;
+                    }
+                    state = 2;
+                }
+            }
+            if (matchoperator(input_string[tptr]) == 1 || foundwhitespace(input_string[tptr]) == 1) {               // lexical standpoint, this is okay, may run into syntax errors
+                tptr--; // need to decrement due to while loop
+                if (state == 1)
+                    accept(tptr, TYPE_INTEGER, input_string);        //handle float types**
+                else
+                    accept(tptr, TYPE_FLOAT, input_string);
+            }
+            else
+                accept(tptr, TYPE_INVALID, input_string);
+        }
+        // check for identifiers (state 1)
+        else if ((input_string[ptr] >= 65 && input_string[ptr] <= 90) || (input_string[ptr] >= 97 && input_string[ptr] <= 122)){    //A-Z a-z
+            tptr = ptr;
+            state = 1;
+            while ((input_string[tptr] >= 65 && input_string[tptr] <= 90) || (input_string[tptr] >= 97 && input_string[tptr] <= 122) ||
+                    (input_string[tptr] >= 48 && input_string[tptr] <= 57) || input_string[tptr] == '_' || input_string[tptr] == '.' ||
+                    input_string[tptr] == '\n' || input_string[tptr] == '\t'){
+                tptr++;
+            }
+            // state 2 - type and reserved
+            if (input_string[tptr] == '=' || input_string[tptr] == '(' || input_string[tptr] == '[' || input_string[tptr] == ' ' ||
+                    matchoperator(input_string[tptr]) == 1) {
+                if (input_string[tptr] != '&')  // if this is not a pointer to address
+                    tptr--;
+                accept(tptr, TYPE_IDENTIFIER, input_string);
+
+                if (matchtype(token.str) == 1)
+                    token.type = TYPE_TYPE;
+                else if (matchreserved(token.str) == 1)
+                    token.type = TYPE_RESERVED;
+            }
+            else
+                accept(tptr, TYPE_INVALID, input_string);
+        }
+        else{
+            printf("\n\nFATAL ERROR\n");
+            break;
+        }
+
+        //printf("\t%s: %s\n", getType(token.type), token.str);
+        fprintf(printout,"\t%s: %s\n", getType(token.type), token.str);
+        printcolor();
+    }
+
+
+    return 0;
 }

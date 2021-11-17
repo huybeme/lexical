@@ -2,26 +2,19 @@
 #include <stdlib.h>
 #include <string.h>
 
-void check_if_exist(FILE *file, char* name)
+int check_if_exist(FILE *file, char* name)
 {
     if (file == NULL)
     {
         printf("'%s' not found.\n", name);
-        exit(0);
+        return 0;
     }
     else
     {
         printf("'%s' opened.\n", name);
+        return 1;
     }
 }
-
-
-int ptr = 0;
-char* input;
-int input_length = 0;
-enum type{TYPE_INTEGER, TYPE_FLOAT, TYPE_STRING, TYPE_CHAR, TYPE_COMMENT,
-    TYPE_TYPE, TYPE_RESERVED, TYPE_OPERATOR, TYPE_IDENTIFIER, TYPE_INVALID};
-FILE *input_file, *printout;
 
 typedef struct{
     int type;       // type of token (there are 9)
@@ -29,7 +22,13 @@ typedef struct{
     int length;     // length of token in number of bytes
 }Token;
 
-Token token;
+int ptr = 0;
+int input_length = 0;
+char* input_string;
+enum type{TYPE_INTEGER, TYPE_FLOAT, TYPE_STRING, TYPE_CHAR, TYPE_COMMENT,
+    TYPE_TYPE, TYPE_RESERVED, TYPE_OPERATOR, TYPE_IDENTIFIER, TYPE_INVALID};
+FILE *input_file, *printout;
+
 
 const char* getType(enum type t){
     switch (t)
@@ -65,12 +64,6 @@ int doneWithInput(){
     return 0;
 }
 
-// fill empty token with next token
-int identifyNextToken(Token *token){
-    // if not valid token, return 0, else 1
-    return 0;
-}
-
 
 // match operators of equal values, >= <= and not > or <
 int match(char* string, int type){
@@ -79,7 +72,12 @@ int match(char* string, int type){
 }
 
 // note strcmp(equal,equal) returns 0 which is true
-int matchtype(char* id){
+int matchtype(){
+    return 0;
+}
+
+
+int matchdatatype(char* id){
     if (strcmp(id, "void") == 0 || strcmp(id, "char") == 0 || strcmp(id, "int") == 0 || strcmp(id, "float") == 0){
         return 1;
     }
@@ -88,9 +86,9 @@ int matchtype(char* id){
 
 int matchreserved(char id[]){
     if (strcmp(id, "sizeof") == 0 || strcmp(id, "enum") == 0 || strcmp(id, "case") == 0 || strcmp(id, "default") == 0 ||
-            strcmp(id, "if") == 0 || strcmp(id, "else") == 0 || strcmp(id, "switch") == 0 || strcmp(id, "while") == 0 ||
-            strcmp(id, "do") == 0 || strcmp(id, "for") == 0 || strcmp(id, "goto") == 0 || strcmp(id, "continue") == 0 ||
-            strcmp(id, "break") == 0 || strcmp(id, "return") == 0){
+        strcmp(id, "if") == 0 || strcmp(id, "else") == 0 || strcmp(id, "switch") == 0 || strcmp(id, "while") == 0 ||
+        strcmp(id, "do") == 0 || strcmp(id, "for") == 0 || strcmp(id, "goto") == 0 || strcmp(id, "continue") == 0 ||
+        strcmp(id, "break") == 0 || strcmp(id, "return") == 0){
         return 1;
     }
     return 0;
@@ -98,10 +96,10 @@ int matchreserved(char id[]){
 
 int matchoperator(char op){
     if (op == '+'  || op == '-'|| op == '*' || op == '/' || op == '<' || op == '>' ||
-            op == '='  || op == '!'|| op == '&' || op == '?' || op == '[' || op == ']' ||
-            op == '{' || op == '}' || op == '|' || op == '(' || op == ')' || op == '%' ||
-            op == '^' || op == ',' || op == ':' || op == ';' || op == '#' || op == '~' ||
-            op == '\\'){
+        op == '='  || op == '!'|| op == '&' || op == '?' || op == '[' || op == ']' ||
+        op == '{' || op == '}' || op == '|' || op == '(' || op == ')' || op == '%' ||
+        op == '^' || op == ',' || op == ':' || op == ';' || op == '#' || op == '~' ||
+        op == '\\'){
         return 1;
     }
 
@@ -115,54 +113,195 @@ int foundwhitespace(char space){
         return 0;
 }
 
-void accept(int tptr, enum type type1, char* line){
-    int len = tptr - ptr;
+void printcolor(Token *token){
+
+    if (strcmp(getType(token->type), "TYPE_TYPE") == 0){     //blue
+        printf("\x1b[34m%s\x1b[0m", token->str);
+    } else if (strcmp(getType(token->type), "TYPE_STRING") == 0 || strcmp(getType(token->type), "TYPE_CHAR") == 0){       //green
+        printf("\x1b[32m%s\x1b[0m", token->str);
+    } else if (strcmp(getType(token->type), "TYPE_INTEGER") == 0 || strcmp(getType(token->type), "TYPE_FLOAT") == 0){     //cyan
+        printf("\x1b[36m%s\x1b[0m", token->str);
+    } else if (strcmp(getType(token->type), "TYPE_RESERVED") == 0){      //purple
+        printf("\x1b[35m%s\x1b[0m", token->str);
+    } else if (strcmp(getType(token->type), "TYPE_COMMENT") == 0){       // hite (shaded)
+        printf("\x1b[37m%s\x1b[0m", token->str);
+    } else if (strcmp(getType(token->type), "TYPE_OPERATOR") == 0){      //yellow
+        printf("\x1b[33m%s\x1b[0m", token->str);
+    } else if (strcmp(getType(token->type), "TYPE_INVALID") == 0){       //bright red
+        printf("\x1b[91m%s\x1b[0m", token->str);
+    }
+    else{   //regular
+        printf("%s", token->str);
+    }
+}
+
+Token accept(Token token, int tptr, enum type type1, char* line){
+    int len = tptr - ptr +1;
     token.type = type1;
     token.length = len;
 
-    for (int i = 0; i <= len; i++){
+    for (int i = 0; i < len; i++){
         token.str[i] = line[ptr +i];
     }
-    token.str[len+1] = '\0';
+    token.str[len +1] = '\0';
+
+    // if it's an identifier - check to reserved and type types
+    if(matchreserved(token.str) == 1)
+        token.type = TYPE_RESERVED;
+    if (matchdatatype(token.str) == 1)
+        token.type = TYPE_TYPE;
 
     fprintf(printout, "pointers: %d-%d\t",ptr, tptr);
-    ptr = tptr + 1; // move ptr to start of next token
+    fprintf(printout, "\t%s: %s\n", getType(token.type), token.str);
+    ptr = tptr; // move ptr to start of next token
 
+    return token;
 }
 
-void printcolor(){
+// fill empty token with next token
+int identifyNextToken(Token token){
 
-    if (strcmp(getType(token.type), "TYPE_TYPE") == 0){     //blue
-        printf("\x1b[34m%s\x1b[0m", token.str);
-    } else if (strcmp(getType(token.type), "TYPE_STRING") == 0 || strcmp(getType(token.type), "TYPE_CHAR") == 0){       //green
-        printf("\x1b[32m%s\x1b[0m", token.str);
-    } else if (strcmp(getType(token.type), "TYPE_INTEGER") == 0 || strcmp(getType(token.type), "TYPE_FLOAT") == 0){     //cyan
-        printf("\x1b[36m%s\x1b[0m", token.str);
-    } else if (strcmp(getType(token.type), "TYPE_RESERVED") == 0){      //purple
-        printf("\x1b[35m%s\x1b[0m", token.str);
-    } else if (strcmp(getType(token.type), "TYPE_COMMENT") == 0){       // hite (shaded)
-        printf("\x1b[37m%s\x1b[0m", token.str);
-    } else if (strcmp(getType(token.type), "TYPE_OPERATOR") == 0){      //yellow
-        printf("\x1b[33m%s\x1b[0m", token.str);
-    } else if (strcmp(getType(token.type), "TYPE_INVALID") == 0){       //bright red
-        printf("\x1b[91m%s\x1b[0m", token.str);
+    int tptr = ptr;
+    int state = 0;
+
+    // pass through white spaces
+    if(input_string[ptr] == ' ' || input_string[ptr] == '\n' || input_string[ptr] == '\t' || input_string[ptr] == '\0'){
+        printf("%c", input_string[ptr]);
+        // should we make a type for white spaces?
     }
-    else{   //regular
-        printf("%s", token.str);
+        // check for operators, comments, includes and defines
+    else if (matchoperator(input_string[ptr]) == 1){
+        if (input_string[ptr] == '/' && input_string[tptr+1] == '/'){
+            while (input_string[tptr] != '\n'){
+                tptr++;
+            }
+            tptr--;
+            token = accept(token,tptr, TYPE_COMMENT, input_string);
+        }
+        else if (input_string[tptr] == '/' && input_string[tptr+1] == '*') {
+            tptr += 2;
+            while (input_string[tptr] != '*' && input_string[tptr + 1] != '/') {
+                tptr++;
+            }
+            tptr++; // capture the second operator for closing comment
+            token = accept(token, tptr, TYPE_COMMENT, input_string);
+        }
+        else if (input_string[ptr] == '#' && input_string[ptr+1] == 'i') {    //handle library inclusion (state 2)
+            int count = 0;
+            char word[10];
+
+            while(input_string[tptr] != ' '){
+                tptr++;
+                word[count] = input_string[tptr];
+                count++;
+            }
+            word[count-1] = '\0';
+            while(input_string[tptr] != '\n'){
+                tptr++;
+            }
+
+            if(strcmp(word, "include") == 0 || strcmp(word, "define") == 0)    // handle include libraries - type invalid for now
+                token = accept(token, tptr, TYPE_COMMENT, input_string);
+            else
+                token = accept(token, tptr, TYPE_INVALID, input_string);
+        }
+        else
+            token = accept(token, tptr, TYPE_OPERATOR, input_string);
+
     }
+        // check for char
+    else if (input_string[ptr] == '\''){
+        // make sure there is appropriate spacing for char
+        if (input_string[ptr+1] == '\\')    // handle backslash chars
+            tptr = ptr+3;
+        else
+            tptr = ptr + 2;  // move to end of char (closing ')
+
+        if (input_string[tptr] == '\'')
+            token = accept(token, tptr, TYPE_CHAR, input_string);
+        else {  // if there is no closing apostrophe, syntax error
+            {      //syntax error, char has too many inputs
+                while (input_string[tptr] != '\'')
+                {
+                    tptr++;
+                    if (input_string[tptr] == '\0')
+                        break;
+                }
+                token = accept(token, tptr, TYPE_INVALID, input_string);
+            }
+        }
+    }
+        // check for string
+    else if (input_string[ptr] == '"'){
+        tptr++;
+        while (input_string[tptr] != '"'){
+            tptr++;
+            if (input_string[tptr] == '\0') // no ending quotes, syntax error
+                break;
+        }
+        if (input_string[ptr] == input_string[tptr])
+            token = accept(token, tptr, TYPE_STRING, input_string);
+        else
+            token = accept(token, tptr, TYPE_INVALID, input_string);
+    }
+        // check for integers   -- need to check for hexidecimals
+    else if (input_string[ptr] >= '0' && input_string[ptr] <= '9'){
+        state = 1;
+        while (input_string[tptr] >= '0' && input_string[tptr] <= '9'){
+            tptr++;
+            // check for float (state 2)
+            if (input_string[tptr] == '.'){
+                tptr++; //move past decimal
+                while (input_string[tptr] >= '0' && input_string[tptr] <= '9') {
+                    tptr++;
+                }
+                state = 2;
+            }
+        }
+        tptr--; // decrement due to while loop
+        if (state == 2)
+            token = accept(token, tptr, TYPE_FLOAT, input_string);
+        else
+            token = accept(token, tptr, TYPE_INTEGER, input_string);
+    }
+        //check for identifiers (state 1)
+    else if ((input_string[ptr] >= 65 && input_string[ptr] <= 90) || (input_string[ptr] >= 97 && input_string[ptr] <= 122)){
+        while ((input_string[tptr] >= 65 && input_string[tptr] <= 90) || (input_string[tptr] >= 97 && input_string[tptr] <= 122) ||
+               (input_string[tptr] >= 48 && input_string[tptr] <= 57) || input_string[tptr] == '_' || input_string[tptr] == '.' ||
+               input_string[tptr] == '\n' || input_string[tptr] == '\t'){
+            tptr++;
+        }
+        tptr--; // decrement due to while loop
+        // make sure no operator following is being added to string
+        if (input_string[tptr] == '=' || input_string[tptr] == '(' || input_string[tptr] == '[' || input_string[tptr] == ' ' ||
+            matchoperator(input_string[tptr]) == 1){
+            tptr--;
+        }
+        token = accept(token, tptr, TYPE_IDENTIFIER, input_string);
+    }
+    else{
+        token = accept(token, tptr, TYPE_INVALID, input_string);
+    }
+
+    printcolor(&token);
+
+    return 0;
 }
 
 int main(int argc, char* argv[]) {
 
-    // take in an input for a file location
-    if (argv[1] != '\0')
+    // run provided file
+    char* input = "test.c";
+    input_file = fopen(input, "r");
+
+    if (argv[1] != '\0')    // if something is passed through terminal
         input = argv[1];
-    else
+    else if (check_if_exist(input_file, input) == 0)     // not running in IDE or nothing passed in terminal, run itself
         input = "main.c";
 
-    //get input file - turn this into an input eventually
     input_file = fopen(input, "r");
-    check_if_exist(input_file, input);
+    if (check_if_exist(input_file, input) == 0)         // if nothing can open, close program
+        exit(0);
 
     //create output
     char* output_path = "lex_data.txt";
@@ -179,7 +318,6 @@ int main(int argc, char* argv[]) {
     printf("\n\n");
 
     // put the file into a string
-    char* input_string;
     input_string=(char*)malloc(input_length);
     rewind(input_file);
     for(int i=0; i<input_length; i++){
@@ -191,150 +329,12 @@ int main(int argc, char* argv[]) {
                       "\ntotal num of chars in file: %d\n\n\n", input_length);
     fclose(input_file);
 
-    int state = 0;
-    int tptr = ptr;     // used for looking ahead
-    int done=0;             // set when token is identified or error is found
+    Token token;
 
     while(ptr <= input_length){
+        identifyNextToken(token);
+        ptr++;
 
-        // print and move past white spaces - handle last white space at the end
-        if (input_string[ptr] == ' ' || input_string[ptr] == '\t' || input_string[ptr] == '\n' || input_string[ptr] == '\0') {
-            if (input_string[ptr] == '\0') {
-                ptr++;
-                continue;
-            }
-            printf("%c", input_string[ptr]);
-            ptr++;
-            continue;
-        }
-        // check for operator (state 1) - keep ptrs at one spot, may need to update for operators with len > 1
-        else if (matchoperator(input_string[ptr])){
-            tptr = ptr;
-            // check for comments (state 2)
-            if (input_string[ptr] == '/' && input_string[tptr+1] == '/'){
-                while (input_string[tptr] != '\n'){
-                    tptr++;
-                }
-                tptr--;
-                accept(tptr, TYPE_COMMENT, input_string);
-            } else if (input_string[tptr] == '/' && input_string[tptr+1] == '*'){
-                tptr += 2;
-                while (input_string[tptr] != '*' && input_string[tptr+1] != '/'){
-                    tptr++;
-                }
-                tptr++; // capture the second operator for closing comment
-                accept(tptr, TYPE_COMMENT, input_string);
-            } else if (input_string[ptr] == '#' && input_string[ptr+1] == 'i') {    //handle library inclusion (state 2)
-                int count = 0;
-                char word[10];
-
-                while(input_string[tptr] != ' '){
-                    tptr++;
-                    word[count] = input_string[tptr];
-                    count++;
-                }
-                word[count-1] = '\0';
-                while(input_string[tptr] != '\n'){
-                    tptr++;
-                }
-
-                if(strcmp(word, "include") == 0 || strcmp(word, "define") == 0)    // handle include libraries - type invalid for now
-                    accept(tptr, TYPE_INVALID, input_string);
-                else
-                    accept(tptr, TYPE_INVALID, input_string);
-            }
-            else
-                accept(tptr, TYPE_OPERATOR, input_string);
-        }
-        // check for char (state 1)
-        else if (input_string[ptr] == '\''){
-            if (input_string[ptr+1] == '\\')    // handle backslash chars
-                tptr = ptr+3;
-            else
-                tptr = ptr + 2;  // move to end of char (closing ')
-            if (input_string[tptr] == '\'')
-                accept(tptr, TYPE_CHAR, input_string);
-            else {      //syntax error, char has too many inputs
-                while (input_string[ptr] != '\'')
-                {
-                    ptr++;
-                    if (input_string[ptr] == '\0')
-                        break;
-                }
-                tptr = ptr;
-                accept(tptr, TYPE_INVALID, input_string);
-            }
-        }
-        // check for string (state 1)
-        else if (input_string[ptr] == '"'){
-            tptr = ptr +1;  // token after "
-            while (input_string[tptr] != '"'){
-                tptr++;
-                if (input_string[tptr] == '\0') // no ending quotes, syntax error
-                    break;
-            }
-            if (input_string[ptr] == input_string[tptr])
-                accept(tptr, TYPE_STRING, input_string);
-            else
-                accept(tptr, TYPE_INVALID, input_string);
-        }
-        // check for integer (state 1)
-        else if (input_string[ptr] >= '0' && input_string[ptr] <= '9'){
-            tptr = ptr;
-            state = 1;
-            while (input_string[tptr] >= '0' && input_string[tptr] <= '9'){
-                tptr++;
-                // check for float (state 2)
-                if (input_string[tptr] == '.'){
-                    tptr++; //move past decimal
-                    while (input_string[tptr] >= '0' && input_string[tptr] <= '9') {
-                        tptr++;
-                    }
-                    state = 2;
-                }
-            }
-            if (matchoperator(input_string[tptr]) == 1 || foundwhitespace(input_string[tptr]) == 1) {               // lexical standpoint, this is okay, may run into syntax errors
-                tptr--; // need to decrement due to while loop
-                if (state == 1)
-                    accept(tptr, TYPE_INTEGER, input_string);        //handle float types**
-                else
-                    accept(tptr, TYPE_FLOAT, input_string);
-            }
-            else
-                accept(tptr, TYPE_INVALID, input_string);
-        }
-        // check for identifiers (state 1)
-        else if ((input_string[ptr] >= 65 && input_string[ptr] <= 90) || (input_string[ptr] >= 97 && input_string[ptr] <= 122)){    //A-Z a-z
-            tptr = ptr;
-            state = 1;
-            while ((input_string[tptr] >= 65 && input_string[tptr] <= 90) || (input_string[tptr] >= 97 && input_string[tptr] <= 122) ||
-                    (input_string[tptr] >= 48 && input_string[tptr] <= 57) || input_string[tptr] == '_' || input_string[tptr] == '.' ||
-                    input_string[tptr] == '\n' || input_string[tptr] == '\t'){
-                tptr++;
-            }
-            // state 2 - type and reserved
-            if (input_string[tptr] == '=' || input_string[tptr] == '(' || input_string[tptr] == '[' || input_string[tptr] == ' ' ||
-                    matchoperator(input_string[tptr]) == 1) {
-                if (input_string[tptr] != '&')  // if this is not a pointer to address
-                    tptr--;
-                accept(tptr, TYPE_IDENTIFIER, input_string);
-
-                if (matchtype(token.str) == 1)
-                    token.type = TYPE_TYPE;
-                else if (matchreserved(token.str) == 1)
-                    token.type = TYPE_RESERVED;
-            }
-            else
-                accept(tptr, TYPE_INVALID, input_string);
-        }
-        else{
-            printf("\n\nFATAL ERROR\n");
-            break;
-        }
-
-        //printf("\t%s: %s\n", getType(token.type), token.str);
-        fprintf(printout,"\t%s: %s\n", getType(token.type), token.str);
-        printcolor();
     }
 
 
