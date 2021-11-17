@@ -143,7 +143,7 @@ Token accept(Token token, int tptr, enum type type1, char* line){
     for (int i = 0; i < len; i++){
         token.str[i] = line[ptr +i];
     }
-    token.str[len +1] = '\0';
+    token.str[len] = '\0';
 
     // if it's an identifier - check to reserved and type types
     if(matchreserved(token.str) == 1)
@@ -151,23 +151,28 @@ Token accept(Token token, int tptr, enum type type1, char* line){
     if (matchdatatype(token.str) == 1)
         token.type = TYPE_TYPE;
 
+
+
     fprintf(printout, "pointers: %d-%d\t",ptr, tptr);
     fprintf(printout, "\t%s: %s\n", getType(token.type), token.str);
-    ptr = tptr; // move ptr to start of next token
+
+    ptr = tptr;
+
 
     return token;
 }
 
 // fill empty token with next token
-int identifyNextToken(Token token){
+Token identifyNextToken(Token token){
 
     int tptr = ptr;
     int state = 0;
 
     // pass through white spaces
-    if(input_string[ptr] == ' ' || input_string[ptr] == '\n' || input_string[ptr] == '\t' || input_string[ptr] == '\0'){
-        printf("%c", input_string[ptr]);
-        // should we make a type for white spaces?
+    if(input_string[ptr] == ' ' || input_string[ptr] == '\n' || input_string[ptr] == '\t'){
+        token.str[0] = input_string[ptr];
+        token.str[1] = '\0';
+        return token;
     }
         // check for operators, comments, includes and defines
     else if (matchoperator(input_string[ptr]) == 1){
@@ -175,15 +180,15 @@ int identifyNextToken(Token token){
             while (input_string[tptr] != '\n'){
                 tptr++;
             }
-            tptr--;
+//            tptr--;
             token = accept(token,tptr, TYPE_COMMENT, input_string);
         }
         else if (input_string[tptr] == '/' && input_string[tptr+1] == '*') {
-            tptr += 2;
+            tptr += 3;
             while (input_string[tptr] != '*' && input_string[tptr + 1] != '/') {
                 tptr++;
             }
-            tptr++; // capture the second operator for closing comment
+            tptr +=1; // capture the second operator for closing comment
             token = accept(token, tptr, TYPE_COMMENT, input_string);
         }
         else if (input_string[ptr] == '#' && input_string[ptr+1] == 'i') {    //handle library inclusion (state 2)
@@ -205,8 +210,9 @@ int identifyNextToken(Token token){
             else
                 token = accept(token, tptr, TYPE_INVALID, input_string);
         }
-        else
+        else {
             token = accept(token, tptr, TYPE_OPERATOR, input_string);
+        }
 
     }
         // check for char
@@ -282,10 +288,7 @@ int identifyNextToken(Token token){
     else{
         token = accept(token, tptr, TYPE_INVALID, input_string);
     }
-
-    printcolor(&token);
-
-    return 0;
+    return token;
 }
 
 int main(int argc, char* argv[]) {
@@ -324,7 +327,6 @@ int main(int argc, char* argv[]) {
         input_string[i]=fgetc(input_file);
     }
     input_string[input_length] = 0;
-//    printf("%s\n\n",input_string);
     fprintf(printout, "\n\t**end of method printout**"
                       "\ntotal num of chars in file: %d\n\n\n", input_length);
     fclose(input_file);
@@ -332,7 +334,8 @@ int main(int argc, char* argv[]) {
     Token token;
 
     while(ptr <= input_length){
-        identifyNextToken(token);
+        token = identifyNextToken(token);
+        printcolor(&token);
         ptr++;
 
     }
